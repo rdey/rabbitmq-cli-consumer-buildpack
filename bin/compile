@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# bin/compile <build-dir> <cache-dir> <env-dir>
+
+### Configure environment
+
+set -o errexit    # always exit on error
+set -o pipefail   # don't ignore exit codes when piping output
+set -o nounset    # fail on unset variables
+
+### Configure directories
+
+BUILD_DIR=${1:-}
+CACHE_DIR=${2:-}
+ENV_DIR=${3:-}
+BP_DIR=$(cd $(dirname ${0:-}); cd ..; pwd)
+
+mkdir -p "$BUILD_DIR/.heroku/rabbitmq-cli-consumer"
+mkdir -p "$CACHE_DIR/rabbitmq-cli-consumer-2.3.1"
+
+cd $BUILD_DIR
+
+### Copy profiles
+
+mkdir -p $BUILD_DIR/.profile.d
+cp $BP_DIR/profile/* $BUILD_DIR/.profile.d/
+
+### Installation
+
+download_rcc() {
+  echo "       Downloading rabbitmq-cli-consumer version 2.3.1..."
+  download_url="https://github.com/corvus-ch/rabbitmq-cli-consumer/releases/download/2.3.1/rabbitmq-cli-consumer_2.3.1_linux_amd64.tar.gz"
+  filename="rabbitmq-cli-consumer_2.3.1_linux_amd64.tar.gz"
+  checksum="d793a3788910a0f55935c57cdc54edf1e5a386596961f007d86ee9294cd7e8cb"
+
+  curl $download_url -L -s -o $CACHE_DIR/$filename
+  echo "       Checking checksum"
+  echo "$checksum  $CACHE_DIR/$filename" | sha256sum -c
+
+  tar -zxf $CACHE_DIR/$filename -C $CACHE_DIR/rabbitmq-cli-consumer-2.3.1
+}
+
+cleanup() {
+  echo "       Cleaning up..."
+  find $CACHE_DIR/rabbitmq-cli-consumer-2.3.1 -type f  | grep -v "rabbitmq-cli-consumer$" | xargs rm
+}
+
+install_rcc() {
+  cp $CACHE_DIR/rabbitmq-cli-consumer-2.3.1/rabbitmq-cli-consumer $BUILD_DIR/.heroku/rabbitmq-cli-consumer/rabbitmq-cli-consumer
+  chmod +x $BUILD_DIR/.heroku/rabbitmq-cli-consumer/rabbitmq-cli-consumer
+  echo "       Installation successful!"
+}
+
+echo "-----> Installing rabbitmq-cli-consumer"
+if [ ! -f $CACHE_DIR/rabbitmq-cli-consumer ]; then
+  download_rcc
+  cleanup
+fi
+
+install_rcc
